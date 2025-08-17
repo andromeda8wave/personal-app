@@ -1,5 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { fmtInt } from './format';
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, CartesianGrid
+} from 'recharts';
+import { fmtInt, fmtMonthLabel } from './format';
+
+const COLORS = ['#10B981','#F43F5E','#3B82F6','#F59E0B','#6366F1','#14B8A6','#8B5CF6','#F97316'];
+const colorFor = (name) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return COLORS[hash % COLORS.length];
+};
 
 const KPI = ({ title, value, positive }) => (
   <div className={`rounded-2xl border bg-white p-4 shadow-sm ${positive===false?'':'text-gray-900'}`}>
@@ -8,12 +19,29 @@ const KPI = ({ title, value, positive }) => (
   </div>
 );
 
-export default function Dashboard({ items, totals, upsertBudget, actualByTopLevelForMonth, budgetByTopLevelForMonth }) {
+export default function Dashboard({ items, totals, monthly, upsertBudget, actualByTopLevelForMonth, budgetByTopLevelForMonth }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0,7));
 
+  const monthlySeries = useMemo(() => monthly.map(m => ({
+    label: fmtMonthLabel(m.month),
+    income: Math.round(m.income),
+    expense: Math.round(m.expense),
+  })), [monthly]);
+
+  const expenseStructure = useMemo(() => {
+    const arr = actualByTopLevelForMonth(month).filter(r => r.type === 'expense');
+    const total = arr.reduce((s, r) => s + r.amount, 0);
+    if (!total) return [];
+    return arr.map(r => ({
+      item: items.find(i => i.id === r.itemId)?.name || 'Unknown',
+      amount: Math.round(r.amount),
+      share: Math.round(r.amount / total * 100)
+    }));
+  }, [actualByTopLevelForMonth, month, items]);
+
   const actualMap = useMemo(() => {
-    const arr = actualByTopLevelForMonth(month);
     const m = new Map();
+    const arr = actualByTopLevelForMonth(month);
     arr.forEach(r => m.set(r.itemId, Math.round(r.amount)));
     return m;
   }, [actualByTopLevelForMonth, month]);
@@ -53,6 +81,40 @@ export default function Dashboard({ items, totals, upsertBudget, actualByTopLeve
         <KPI title="Expenses" value={fmtInt(totals.expense)} />
         <KPI title="Net" value={fmtInt(totals.net)} positive={totals.net>=0} />
         <KPI title="Total Balance" value={fmtInt(totals.totalBalance)} positive />
+      </div>
+
+<div className="grid md:grid-cols-2 gap-6">
+        <div className="h-[340px]" aria-label="Monthly Income vs Expenses">
+          {monthlySeries.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={monthlySeries}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" />
+                <YAxis tickFormatter={v=>fmtInt(v)} />
+                <Tooltip formatter={v=>fmtInt(v)} />
+                <Legend />
+                <Line type="monotone" dataKey="income" name="Income" stroke="#10B981" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="expense" name="Expense" stroke="#F43F5E" dot={false} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+        <div className="h-[340px]" aria-label="Expense Structure">
+          {expenseStructure.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={expenseStructure} dataKey="share" nameKey="item" label={({item,share})=>`${item} — ${share}%`}>
+                  {expenseStructure.map(e => <Cell key={e.item} fill={colorFor(e.item)} />)}
+                </Pie>
+                <Tooltip formatter={(v,name,props)=>fmtInt(props.payload.amount)} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       <div className="rounded-2xl border bg-white p-4 shadow-sm">

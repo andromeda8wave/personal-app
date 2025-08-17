@@ -362,8 +362,9 @@ export default function App() {
           {tab === "dashboard" && (
             <Dashboard
               items={db.items}
-              budgets={db.budgets}
               totals={totals}
+              monthly={monthly}
+              budgets={db.budgets}
               upsertBudget={upsertBudget}
               actualByTopLevelForMonth={actualByTopLevelForMonth}
               budgetByTopLevelForMonth={budgetByTopLevelForMonth}
