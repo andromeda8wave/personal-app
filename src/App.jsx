@@ -1,4 +1,5 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 // =============================================================
 // Canvas Finance Tracker — v1.1 (senior refactor: structure + perf)
@@ -81,6 +82,11 @@ function formatMoney(amount, currency = APP_CURRENCY) {
   }
 }
 
+function formatPercent(value) {
+  if (value == null || isNaN(value)) return "—";
+  return new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 0 }).format(value);
+}
+
 // Debounce hook
 function useDebounced(value, delay = 250) {
   const [v, setV] = useState(value);
@@ -144,15 +150,41 @@ function useDerived(db /** @type {DB} */) {
     return { income: inc, expense: exp, net, totalBalance };
   }, [db.txs, db.wallets, walletBalances]);
 
-  return { itemMap, walletMap, walletBalances, totals };
+  // monthly income/expense stats
+  const monthly = useMemo(() => {
+    const m = new Map();
+    for (const t of db.txs) {
+      const key = t.date.slice(0, 7);
+      const obj = m.get(key) || { month: key, income: 0, expense: 0 };
+      obj[t.type] += t.amount;
+      m.set(key, obj);
+    }
+    return Array.from(m.values()).sort((a, b) => a.month.localeCompare(b.month));
+  }, [db.txs]);
+
+  // expense structure by item
+  const expenseByItem = useMemo(() => {
+    const m = new Map();
+    for (const t of db.txs) if (t.type === "expense") {
+      m.set(t.itemId, (m.get(t.itemId) || 0) + t.amount);
+    }
+    return Array.from(m.entries()).map(([id, value]) => ({ name: itemMap[id]?.name || "Unknown", value }));
+  }, [db.txs, itemMap]);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const monthEntry = monthly.find(m => m.month === currentMonth) || { income: 0, expense: 0 };
+  const netThisMonth = monthEntry.income - monthEntry.expense;
+  const expenseIncomeRatio = monthEntry.income ? monthEntry.expense / monthEntry.income : 0;
+
+  return { itemMap, walletMap, walletBalances, totals, monthly, expenseByItem, netThisMonth, expenseIncomeRatio };
 }
 
 // ------------------------- App -------------------------
 export default function App() {
   const { db, addTx, updTx, delTx, upsertItem, delItem, upsertWallet, delWallet, resetDemo, importDB } = useDB();
-  const { itemMap, walletMap, walletBalances, totals } = useDerived(db);
+  const { itemMap, walletMap, walletBalances, totals, monthly, expenseByItem, netThisMonth, expenseIncomeRatio } = useDerived(db);
 
-  const [tab, setTab] = useState(/** @type {"transactions"|"items"|"wallets"} */("transactions"));
+  const [tab, setTab] = useState(/** @type {"dashboard"|"transactions"|"items"|"wallets"} */("dashboard"));
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 250);
   const slowSearch = useDeferredValue(debouncedSearch);
@@ -207,8 +239,9 @@ export default function App() {
           </div>
         </header>
 
-        <nav className="mb-6 grid grid-cols-3 gap-2 md:w-[36rem]">
+        <nav className="mb-6 grid grid-cols-4 gap-2 md:w-[48rem]">
           {[
+            { id: "dashboard", label: "Dashboard" },
             { id: "transactions", label: "Transactions" },
             { id: "items", label: "Items" },
             { id: "wallets", label: "Wallets" },
@@ -221,7 +254,17 @@ export default function App() {
           ))}
         </nav>
 
-        <SummaryRow totals={totals} />
+        {tab === "dashboard" && (
+          <DashboardPanel
+            monthly={monthly}
+            expenseByItem={expenseByItem}
+            totals={totals}
+            net={netThisMonth}
+            ratio={expenseIncomeRatio}
+          />
+        )}
+
+        {tab !== "dashboard" && <SummaryRow totals={totals} />}
 
         {tab === "transactions" && (
           <TransactionsPanel
@@ -273,6 +316,44 @@ function SummaryRow({ totals }) {
   );
 }
 
+function DashboardPanel({ monthly, expenseByItem, totals, net, ratio }) {
+  const COLORS = ["#3b82f6", "#ef4444", "#f97316", "#10b981", "#8b5cf6", "#6366f1", "#14b8a6", "#f59e0b"]; // tailwind colors
+  return (
+    <div className="space-y-6 mb-6">
+      <div className="grid md:grid-cols-3 gap-3">
+        <KPI title="Balance" value={formatMoney(totals.totalBalance)} positive />
+        <KPI title="Net this month" value={formatMoney(net)} positive={net>=0} />
+        <KPI title="Exp/Inc ratio" value={formatPercent(ratio)} />
+      </div>
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={monthly}>
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip formatter={(v) => formatMoney(v)} />
+              <Line type="monotone" dataKey="income" stroke="#16a34a" name="Income" />
+              <Line type="monotone" dataKey="expense" stroke="#dc2626" name="Expenses" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={expenseByItem} dataKey="value" nameKey="name" label>
+                {expenseByItem.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(v) => formatMoney(v)} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ------------------------- Transactions -------------------------
 function TransactionsPanel({ txs, items, wallets, addTx, updTx, delTx, itemMap, walletMap, search, setSearch }) {
   const [editingId, setEditingId] = useState(null); // null | string
@@ -313,22 +394,19 @@ function TransactionsPanel({ txs, items, wallets, addTx, updTx, delTx, itemMap, 
       </div>
 
       <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <Th>Date</Th>
-              <Th>Type</Th>
-              <Th className="text-right">Amount</Th>
-              <Th>Item</Th>
-              <Th>Wallet</Th>
-              <Th>Comment</Th>
-              <Th className="text-right">Actions</Th>
-            </tr>
-          </thead>
-        </table>
-        {/* Windowed body */}
         <div ref={containerRef} onScroll={onScroll} style={{ maxHeight: containerHeight, overflow: "auto" }}>
           <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-600 sticky top-0">
+              <tr>
+                <Th>Date</Th>
+                <Th>Type</Th>
+                <Th className="text-right">Amount</Th>
+                <Th>Item</Th>
+                <Th>Wallet</Th>
+                <Th>Comment</Th>
+                <Th className="text-right">Actions</Th>
+              </tr>
+            </thead>
             <tbody>
               {txs.length === 0 && (
                 <tr><td colSpan={7} className="p-6 text-center text-gray-500">No transactions yet. Add your first one!</td></tr>
