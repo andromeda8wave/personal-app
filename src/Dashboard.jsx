@@ -75,8 +75,8 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
         <KPI title="Total Balance" value={fmtInt(totals.totalBalance)} positive />
       </div>
 
-      <div className="flex flex-col gap-6 md:flex-row">
-        <div className="h-[480px] rounded-2xl border bg-white p-4 shadow-sm md:flex-[2]" aria-label="Monthly Income vs Expenses">
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="h-[480px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-2" aria-label="Monthly Income vs Expenses">
           {monthlySeries.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
@@ -97,15 +97,15 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
                 <YAxis tickFormatter={v=>fmtInt(v)} />
                 <Tooltip formatter={v=>fmtInt(v)} />
                 <Legend verticalAlign="top" height={36} />
-                <Area type="monotone" dataKey="income" stroke="none" fill="url(#incomeFill)" />
-                <Area type="monotone" dataKey="expense" stroke="none" fill="url(#expenseFill)" />
-                <Line type="monotone" dataKey="income" name="Income" stroke="#10B981" dot={false} strokeWidth={2} />
-                <Line type="monotone" dataKey="expense" name="Expense" stroke="#F43F5E" dot={false} strokeWidth={2} />
+                <Area type="natural" dataKey="income" stroke="none" fill="url(#incomeFill)" />
+                <Area type="natural" dataKey="expense" stroke="none" fill="url(#expenseFill)" />
+                <Line type="natural" dataKey="income" name="Income" stroke="#10B981" dot={false} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                <Line type="natural" dataKey="expense" name="Expense" stroke="#F43F5E" dot={false} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
               </LineChart>
             </ResponsiveContainer>
           )}
         </div>
-        <div className="h-[320px] rounded-2xl border bg-white p-4 shadow-sm md:flex-1" aria-label="Expense Structure">
+        <div className="h-[320px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-1" aria-label="Expense Structure">
           {expenseStructure.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
@@ -115,8 +115,8 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
                   data={expenseStructure}
                   dataKey="share"
                   nameKey="item"
-                  innerRadius={60}
-                  outerRadius={100}
+                  innerRadius="60%"
+                  outerRadius="80%"
                   paddingAngle={2}
                 >
                   {expenseStructure.map(e => (
@@ -125,9 +125,9 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
                 </Pie>
                 <Tooltip formatter={(v, name, props) => fmtInt(props.payload.amount)} />
                 <Legend
-                  layout="vertical"
-                  align="right"
-                  verticalAlign="middle"
+                  layout="horizontal"
+                  verticalAlign="bottom"
+                  align="center"
                   formatter={(value) => {
                     const share = expenseStructure.find(e => e.item === value)?.share;
                     return `${value} (${share}%)`;
