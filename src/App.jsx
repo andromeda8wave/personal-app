@@ -1,5 +1,5 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import Dashboard from "./Dashboard";
 
 // =============================================================
 // Canvas Finance Tracker — v1.1 (senior refactor: structure + perf)
@@ -243,7 +243,6 @@ export default function App() {
           {[
             { id: "dashboard", label: "Dashboard" },
             { id: "transactions", label: "Transactions" },
-            { id: "items", label: "Items" },
             { id: "wallets", label: "Wallets" },
           ].map(t => (
             <button
@@ -254,15 +253,10 @@ export default function App() {
           ))}
         </nav>
 
-        {tab === "dashboard" && (
-          <DashboardPanel
-            monthly={monthly}
-            expenseByItem={expenseByItem}
-            totals={totals}
-            net={netThisMonth}
-            ratio={expenseIncomeRatio}
-          />
-        )}
+          {tab === "dashboard" && (
+            <Dashboard txs={db.txs} items={db.items} totals={totals} />
+          )}
+
 
         {tab !== "dashboard" && <SummaryRow totals={totals} />}
 
@@ -316,43 +310,7 @@ function SummaryRow({ totals }) {
   );
 }
 
-function DashboardPanel({ monthly, expenseByItem, totals, net, ratio }) {
-  const COLORS = ["#3b82f6", "#ef4444", "#f97316", "#10b981", "#8b5cf6", "#6366f1", "#14b8a6", "#f59e0b"]; // tailwind colors
-  return (
-    <div className="space-y-6 mb-6">
-      <div className="grid md:grid-cols-3 gap-3">
-        <KPI title="Balance" value={formatMoney(totals.totalBalance)} positive />
-        <KPI title="Net this month" value={formatMoney(net)} positive={net>=0} />
-        <KPI title="Exp/Inc ratio" value={formatPercent(ratio)} />
-      </div>
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={monthly}>
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip formatter={(v) => formatMoney(v)} />
-              <Line type="monotone" dataKey="income" stroke="#16a34a" name="Income" />
-              <Line type="monotone" dataKey="expense" stroke="#dc2626" name="Expenses" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={expenseByItem} dataKey="value" nameKey="name" label>
-                {expenseByItem.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(v) => formatMoney(v)} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-  );
-}
+// function DashboardPanel removed for new Dashboard
 
 // ------------------------- Transactions -------------------------
 function TransactionsPanel({ txs, items, wallets, addTx, updTx, delTx, itemMap, walletMap, search, setSearch }) {
