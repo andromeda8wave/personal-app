@@ -75,8 +75,8 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
         <KPI title="Total Balance" value={fmtInt(totals.totalBalance)} positive />
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 h-[480px] rounded-2xl border bg-white p-4 shadow-sm" aria-label="Monthly Income vs Expenses">
+      <div className="flex flex-col gap-6 md:flex-row">
+        <div className="h-[480px] rounded-2xl border bg-white p-4 shadow-sm md:flex-[2]" aria-label="Monthly Income vs Expenses">
           {monthlySeries.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
@@ -105,7 +105,7 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
             </ResponsiveContainer>
           )}
         </div>
-        <div className="h-[320px] rounded-2xl border bg-white p-4 shadow-sm" aria-label="Expense Structure">
+        <div className="h-[320px] rounded-2xl border bg-white p-4 shadow-sm md:flex-1" aria-label="Expense Structure">
           {expenseStructure.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
