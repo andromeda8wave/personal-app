@@ -4,6 +4,7 @@ import {
   PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts';
 import { fmtInt, fmtMonthLabel } from './format';
+import { buildExpenseStructure } from './analytics';
 
 const COLORS = ['#10B981','#F43F5E','#3B82F6','#F59E0B','#6366F1','#14B8A6','#8B5CF6','#F97316'];
 const colorFor = (name) => {
@@ -19,7 +20,7 @@ const KPI = ({ title, value, positive }) => (
   </div>
 );
 
-export default function Dashboard({ items, totals, monthly, upsertBudget, actualByTopLevelForMonth, budgetByTopLevelForMonth }) {
+export default function Dashboard({ items, txs, totals, monthly, upsertBudget, actualByTopLevelForMonth, budgetByTopLevelForMonth }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0,7));
 
   const monthlySeries = useMemo(() => monthly.map(m => ({
@@ -28,16 +29,7 @@ export default function Dashboard({ items, totals, monthly, upsertBudget, actual
     expense: Math.round(m.expense),
   })), [monthly]);
 
-  const expenseStructure = useMemo(() => {
-    const arr = actualByTopLevelForMonth(month).filter(r => r.type === 'expense');
-    const total = arr.reduce((s, r) => s + r.amount, 0);
-    if (!total) return [];
-    return arr.map(r => ({
-      item: items.find(i => i.id === r.itemId)?.name || 'Unknown',
-      amount: Math.round(r.amount),
-      share: Math.round(r.amount / total * 100)
-    }));
-  }, [actualByTopLevelForMonth, month, items]);
+  const expenseStructure = useMemo(() => buildExpenseStructure(txs, items), [txs, items]);
 
   const actualMap = useMemo(() => {
     const m = new Map();
@@ -89,7 +81,7 @@ export default function Dashboard({ items, totals, monthly, upsertBudget, actual
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlySeries} margin={{ top: 20, right: 20, left: 0, bottom: 50 }}>
+              <LineChart data={monthlySeries} margin={{ top: 60, right: 20, left: 40, bottom: 60 }}>
                 <defs>
                   <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
@@ -101,10 +93,10 @@ export default function Dashboard({ items, totals, monthly, upsertBudget, actual
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" interval={0} angle={-45} textAnchor="end" height={60} tickMargin={8} />
+                <XAxis dataKey="label" interval={0} angle={-45} textAnchor="end" height={80} tickMargin={16} />
                 <YAxis tickFormatter={v=>fmtInt(v)} />
                 <Tooltip formatter={v=>fmtInt(v)} />
-                <Legend />
+                <Legend verticalAlign="top" height={36} />
                 <Area type="monotone" dataKey="income" stroke="none" fill="url(#incomeFill)" />
                 <Area type="monotone" dataKey="expense" stroke="none" fill="url(#expenseFill)" />
                 <Line type="monotone" dataKey="income" name="Income" stroke="#10B981" dot={false} strokeWidth={2} />
