@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  LineChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts';
 import { fmtInt, fmtMonthLabel } from './format';
@@ -89,12 +89,24 @@ export default function Dashboard({ items, totals, monthly, upsertBudget, actual
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlySeries}>
+              <LineChart data={monthlySeries} margin={{ top: 20, right: 20, left: 0, bottom: 50 }}>
+                <defs>
+                  <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#F43F5E" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" />
+                <XAxis dataKey="label" interval={0} angle={-45} textAnchor="end" height={60} tickMargin={8} />
                 <YAxis tickFormatter={v=>fmtInt(v)} />
                 <Tooltip formatter={v=>fmtInt(v)} />
                 <Legend />
+                <Area type="monotone" dataKey="income" stroke="none" fill="url(#incomeFill)" />
+                <Area type="monotone" dataKey="expense" stroke="none" fill="url(#expenseFill)" />
                 <Line type="monotone" dataKey="income" name="Income" stroke="#10B981" dot={false} strokeWidth={2} />
                 <Line type="monotone" dataKey="expense" name="Expense" stroke="#F43F5E" dot={false} strokeWidth={2} />
               </LineChart>
@@ -107,10 +119,28 @@ export default function Dashboard({ items, totals, monthly, upsertBudget, actual
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={expenseStructure} dataKey="share" nameKey="item" label={({item,share})=>`${item} — ${share}%`}>
-                  {expenseStructure.map(e => <Cell key={e.item} fill={colorFor(e.item)} />)}
+                <Pie
+                  data={expenseStructure}
+                  dataKey="share"
+                  nameKey="item"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={2}
+                >
+                  {expenseStructure.map(e => (
+                    <Cell key={e.item} fill={colorFor(e.item)} />
+                  ))}
                 </Pie>
-                <Tooltip formatter={(v,name,props)=>fmtInt(props.payload.amount)} />
+                <Tooltip formatter={(v, name, props) => fmtInt(props.payload.amount)} />
+                <Legend
+                  layout="vertical"
+                  align="right"
+                  verticalAlign="middle"
+                  formatter={(value) => {
+                    const share = expenseStructure.find(e => e.item === value)?.share;
+                    return `${value} (${share}%)`;
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           )}
