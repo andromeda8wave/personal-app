@@ -3,9 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts';
-import { buildMonthlySeries, buildExpenseStructure, buildBudgetReport } from './analytics';
-import { fmtInt, fmtCurrency2 } from './format';
-import { useBudgets } from './budgets';
+import { fmtInt, fmtMonthLabel } from './format';
 
 const COLORS = ['#10B981','#F43F5E','#3B82F6','#F59E0B','#6366F1','#14B8A6','#8B5CF6','#F97316'];
 const colorFor = (name) => {
@@ -21,36 +19,60 @@ const KPI = ({ title, value, positive }) => (
   </div>
 );
 
-export default function Dashboard({ txs, items, totals }) {
-  const monthly = useMemo(() => buildMonthlySeries(txs), [txs]);
-  const expenseStructure = useMemo(() => buildExpenseStructure(txs, items), [txs, items]);
-
-  const { budgets, upsertBudget, deleteBudget } = useBudgets();
+export default function Dashboard({ items, totals, monthly, upsertBudget, actualByTopLevelForMonth, budgetByTopLevelForMonth }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0,7));
-  const budgetData = useMemo(() => buildBudgetReport(txs, items, budgets, month), [txs, items, budgets, month]);
-  const budgetIdMap = useMemo(() => {
+
+  const monthlySeries = useMemo(() => monthly.map(m => ({
+    label: fmtMonthLabel(m.month),
+    income: Math.round(m.income),
+    expense: Math.round(m.expense),
+  })), [monthly]);
+
+  const expenseStructure = useMemo(() => {
+    const arr = actualByTopLevelForMonth(month).filter(r => r.type === 'expense');
+    const total = arr.reduce((s, r) => s + r.amount, 0);
+    if (!total) return [];
+    return arr.map(r => ({
+      item: items.find(i => i.id === r.itemId)?.name || 'Unknown',
+      amount: Math.round(r.amount),
+      share: Math.round(r.amount / total * 100)
+    }));
+  }, [actualByTopLevelForMonth, month, items]);
+
+  const actualMap = useMemo(() => {
     const m = new Map();
-    budgets.forEach(b => { if (b.period===month) m.set(b.itemId, b.id); });
+    const arr = actualByTopLevelForMonth(month);
+    arr.forEach(r => m.set(r.itemId, Math.round(r.amount)));
     return m;
-  }, [budgets, month]);
-  const expenseItems = useMemo(() => items.filter(i=>i.type==='expense'), [items]);
-  const unusedItems = expenseItems.filter(i => !budgetData.rows.find(r=>r.itemId===i.id));
-  const [newItem, setNewItem] = useState(unusedItems[0]?.id || '');
-  const [newAmount, setNewAmount] = useState('');
+  }, [actualByTopLevelForMonth, month]);
 
-  const addBudget = () => {
-    const amount = parseFloat(newAmount);
-    if (!newItem || isNaN(amount)) return;
-    upsertBudget({ itemId:newItem, period:month, amount });
-    setNewAmount('');
-  };
+  const budgetMap = useMemo(() => budgetByTopLevelForMonth(month), [budgetByTopLevelForMonth, month]);
 
-  const onBudgetChange = (itemId, val) => {
-    const amount = parseFloat(val);
-    if (isNaN(amount) || amount < 0) return;
-    const id = budgetIdMap.get(itemId);
-    upsertBudget({ id, itemId, period:month, amount });
-  };
+  const incomeTop = useMemo(() => items.filter(i => !i.parentId && i.type === 'income'), [items]);
+  const expenseTop = useMemo(() => items.filter(i => !i.parentId && i.type === 'expense'), [items]);
+
+  const renderRows = (list) => list.map(item => {
+    const plan = Math.round(budgetMap.get(item.id) || 0);
+    const actual = Math.round(actualMap.get(item.id) || 0);
+    const diff = plan - actual;
+    return (
+      <tr key={item.id} className="border-t">
+        <td className="p-2">{item.name}</td>
+        <td className="p-2 text-right">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={plan}
+            onChange={e => upsertBudget({ itemId: item.id, month, amount: Number(e.target.value) || 0 })}
+            className="w-20 border rounded px-1 text-right"
+          />
+        </td>
+        <td className="p-2 text-right">{actual}</td>
+        <td className={`p-2 text-right ${diff >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{diff}</td>
+      </tr>
+    );
+  });
 
   return (
     <div className="space-y-6 mb-6">
@@ -63,15 +85,15 @@ export default function Dashboard({ txs, items, totals }) {
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="h-[340px]" aria-label="Monthly Income vs Expenses">
-          {monthly.length === 0 ? (
+          {monthlySeries.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthly}>
+              <LineChart data={monthlySeries}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="label" />
-                <YAxis tickFormatter={(v)=>fmtInt(v)} />
-                <Tooltip formatter={(v)=>fmtInt(v)} />
+                <YAxis tickFormatter={v=>fmtInt(v)} />
+                <Tooltip formatter={v=>fmtInt(v)} />
                 <Legend />
                 <Line type="monotone" dataKey="income" name="Income" stroke="#10B981" dot={false} strokeWidth={2} />
                 <Line type="monotone" dataKey="expense" name="Expense" stroke="#F43F5E" dot={false} strokeWidth={2} />
@@ -88,7 +110,7 @@ export default function Dashboard({ txs, items, totals }) {
                 <Pie data={expenseStructure} dataKey="share" nameKey="item" label={({item,share})=>`${item} — ${share}%`}>
                   {expenseStructure.map(e => <Cell key={e.item} fill={colorFor(e.item)} />)}
                 </Pie>
-                <Tooltip formatter={(v, name, props)=>fmtInt(props.payload.amount)} />
+                <Tooltip formatter={(v,name,props)=>fmtInt(props.payload.amount)} />
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -97,54 +119,37 @@ export default function Dashboard({ txs, items, totals }) {
 
       <div className="rounded-2xl border bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold">Budgets</h3>
+          <h3 className="font-semibold">Budget</h3>
           <input type="month" value={month} onChange={e=>setMonth(e.target.value)} className="border rounded-xl px-2 py-1" />
         </div>
         <div className="overflow-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b">
-                <th className="py-1">Category</th>
-                <th className="py-1 text-right">Budget</th>
-                <th className="py-1 text-right">Actual</th>
-                <th className="py-1 text-right">Difference</th>
-                <th></th>
+                <th className="p-2">Item</th>
+                <th className="p-2 text-right">Plan</th>
+                <th className="p-2 text-right">Actual</th>
+                <th className="p-2 text-right">Difference</th>
               </tr>
             </thead>
             <tbody>
-              {budgetData.rows.map(r => (
-                <tr key={r.itemId} className="border-b last:border-b-0">
-                  <td className="py-1">{r.itemName}</td>
-                  <td className="py-1 text-right"><input type="number" step="0.01" value={r.budget} onChange={e=>onBudgetChange(r.itemId,e.target.value)} className="w-24 border rounded px-1 text-right"/></td>
-                  <td className="py-1 text-right">{fmtCurrency2(r.actual)}</td>
-                  <td className={`py-1 text-right ${r.difference>=0?'text-emerald-600':'text-rose-600'}`}>{fmtCurrency2(r.difference)}</td>
-                  <td className="py-1 text-right"><button onClick={()=>deleteBudget(budgetIdMap.get(r.itemId))} className="text-xs text-rose-600">Del</button></td>
-                </tr>
-              ))}
-              <tr>
-                <td className="py-1">
-                  <select value={newItem} onChange={e=>setNewItem(e.target.value)} className="border rounded px-1">
-                    {unusedItems.map(i=>(<option key={i.id} value={i.id}>{i.name}</option>))}
-                  </select>
-                </td>
-                <td className="py-1 text-right"><input type="number" step="0.01" value={newAmount} onChange={e=>setNewAmount(e.target.value)} className="w-24 border rounded px-1 text-right"/></td>
-                <td className="py-1 text-right">—</td>
-                <td className="py-1 text-right">—</td>
-                <td className="py-1 text-right"><button onClick={addBudget} className="text-xs text-emerald-600">Add</button></td>
-              </tr>
+              {incomeTop.length>0 && (
+                <>
+                  <tr className="border-t"><td colSpan={4} className="p-2 font-semibold">Income</td></tr>
+                  {renderRows(incomeTop)}
+                </>
+              )}
+              {expenseTop.length>0 && (
+                <>
+                  <tr className="border-t"><td colSpan={4} className="p-2 font-semibold">Expenses</td></tr>
+                  {renderRows(expenseTop)}
+                </>
+              )}
             </tbody>
-            <tfoot>
-              <tr className="font-semibold border-t">
-                <td className="py-1">Totals</td>
-                <td className="py-1 text-right">{fmtCurrency2(budgetData.totals.budget)}</td>
-                <td className="py-1 text-right">{fmtCurrency2(budgetData.totals.actual)}</td>
-                <td className={`py-1 text-right ${budgetData.totals.difference>=0?'text-emerald-600':'text-rose-600'}`}>{fmtCurrency2(budgetData.totals.difference)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       </div>
     </div>
   );
 }
+

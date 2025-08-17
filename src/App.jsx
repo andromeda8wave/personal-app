@@ -16,33 +16,35 @@ import Dashboard from "./Dashboard";
 // No external deps. All data stays in localStorage (private). Export/Import JSON supported.
 
 // ------------------------- Constants & Types -------------------------
-const DB_KEY = "cft_db_v1"; // bump when schema changes
+const DB_KEY = "cft_db_v2"; // bump when schema changes
 const APP_CURRENCY = "RUB"; // default when wallet currency missing
 
 /** @typedef {"income"|"expense"} TxType */
-/** @typedef {{ id:string, name:string, type:TxType }} Item */
+/** @typedef {{ id:string, name:string, type:TxType, parentId?:string|null }} Item */
 /** @typedef {{ id:string, name:string, currency?:string, initialBalance:number }} Wallet */
 /** @typedef {{ id:string, date:string, type:TxType, amount:number, itemId:string, walletId:string, comment?:string }} Transaction */
-/** @typedef {{ version:number, items:Item[], wallets:Wallet[], txs:Transaction[] }} DB */
+/** @typedef {{ id:string, itemId:string, month:string, amount:number }} Budget */
+/** @typedef {{ version:number, items:Item[], wallets:Wallet[], txs:Transaction[], budgets:Budget[] }} DB */
 
-const VERSION = 1;
+const VERSION = 2;
 
 // Demo seed (only used on first run)
 const seedId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const DEMO_DB /** @type {DB} */ = {
   version: VERSION,
   items: [
-    { id: seedId(), name: "Salary", type: "income" },
-    { id: seedId(), name: "Freelance", type: "income" },
-    { id: seedId(), name: "Groceries", type: "expense" },
-    { id: seedId(), name: "Restaurants", type: "expense" },
-    { id: seedId(), name: "Transport", type: "expense" },
+    { id: seedId(), name: "Salary", type: "income", parentId: null },
+    { id: seedId(), name: "Freelance", type: "income", parentId: null },
+    { id: seedId(), name: "Groceries", type: "expense", parentId: null },
+    { id: seedId(), name: "Restaurants", type: "expense", parentId: null },
+    { id: seedId(), name: "Transport", type: "expense", parentId: null },
   ],
   wallets: [
     { id: seedId(), name: "Cash", currency: "RUB", initialBalance: 2000 },
     { id: seedId(), name: "Tinkoff debit", currency: "RUB", initialBalance: 12000 },
   ],
   txs: [],
+  budgets: [],
 };
 
 // ------------------------- Utilities -------------------------
@@ -55,17 +57,38 @@ function tryParseJSON(text) {
 }
 
 function loadDB() {
-  // primary v1
   const raw = localStorage.getItem(DB_KEY);
   if (raw) {
     const db = tryParseJSON(raw);
     if (db && typeof db === "object" && db.version === VERSION) return db;
   }
-  // migrate from old keys if exist
+
+  const rawV1 = localStorage.getItem("cft_db_v1");
+  if (rawV1) {
+    const old = tryParseJSON(rawV1);
+    if (old && typeof old === "object") {
+      const migrated = {
+        version: VERSION,
+        items: (old.items || []).map(i => ({ ...i, parentId: i.parentId ?? null })),
+        wallets: old.wallets || [],
+        txs: old.txs || [],
+        budgets: []
+      };
+      saveDB(migrated);
+      return migrated;
+    }
+  }
+
   const oldItems = tryParseJSON(localStorage.getItem("cft_items") || "null") || DEMO_DB.items;
   const oldWallets = tryParseJSON(localStorage.getItem("cft_wallets") || "null") || DEMO_DB.wallets;
   const oldTxs = tryParseJSON(localStorage.getItem("cft_transactions") || "null") || DEMO_DB.txs;
-  const migrated = { version: VERSION, items: oldItems, wallets: oldWallets, txs: oldTxs };
+  const migrated = {
+    version: VERSION,
+    items: oldItems.map(i => ({ ...i, parentId: i.parentId ?? null })),
+    wallets: oldWallets,
+    txs: oldTxs,
+    budgets: []
+  };
   saveDB(migrated);
   return migrated;
 }
@@ -119,10 +142,31 @@ function useDB() {
   }), []);
   const delWallet = useCallback((id) => setDb(d => ({ ...d, wallets: d.wallets.filter(x => x.id !== id) })), []);
 
-  const resetDemo = useCallback(() => setDb(DEMO_DB), []);
-  const importDB = useCallback((data) => setDb(() => ({ version: VERSION, items: data.items||[], wallets: data.wallets||[], txs: data.txs||[] })), []);
+  const upsertBudget = useCallback(({ itemId, month, amount }) => setDb(d => {
+    const a = Math.max(0, Number(amount) || 0);
+    const idx = d.budgets.findIndex(b => b.itemId === itemId && b.month === month);
+    if (idx >= 0) {
+      const copy = d.budgets.slice();
+      copy[idx] = { ...copy[idx], amount: a };
+      return { ...d, budgets: copy };
+    }
+    return { ...d, budgets: [...d.budgets, { id: uid(), itemId, month, amount: a }] };
+  }), []);
 
-  return { db, setDb, addTx, updTx, delTx, upsertItem, delItem, upsertWallet, delWallet, resetDemo, importDB };
+  const delBudget = useCallback((itemId, month) =>
+    setDb(d => ({ ...d, budgets: d.budgets.filter(b => !(b.itemId === itemId && b.month === month)) })),
+  []);
+
+  const resetDemo = useCallback(() => setDb(DEMO_DB), []);
+  const importDB = useCallback((data) => setDb(() => ({
+    version: VERSION,
+    items: (data.items || []).map(i => ({ ...i, parentId: i.parentId ?? null })),
+    wallets: data.wallets || [],
+    txs: data.txs || [],
+    budgets: (data.budgets || []).map(b => ({ id: b.id || uid(), itemId: b.itemId, month: b.month, amount: Math.max(0, Number(b.amount) || 0) }))
+  })), []);
+
+  return { db, setDb, addTx, updTx, delTx, upsertItem, delItem, upsertWallet, delWallet, upsertBudget, delBudget, resetDemo, importDB };
 }
 
 // ------------------------- Derived selectors -------------------------
@@ -130,6 +174,28 @@ function useDerived(db /** @type {DB} */) {
   // lookup maps
   const itemMap = useMemo(() => Object.fromEntries(db.items.map(i => [i.id, i])), [db.items]);
   const walletMap = useMemo(() => Object.fromEntries(db.wallets.map(w => [w.id, w])), [db.wallets]);
+  const childrenMap = useMemo(() => {
+    const m = new Map();
+    for (const i of db.items) {
+      const p = i.parentId || null;
+      if (!m.has(p)) m.set(p, []);
+      m.get(p).push(i);
+    }
+    return m;
+  }, [db.items]);
+
+  const isLeaf = useCallback((itemId) => {
+    const kids = childrenMap.get(itemId);
+    return !kids || kids.length === 0;
+  }, [childrenMap]);
+
+  const getRootId = useCallback((itemId) => {
+    let cur = itemMap[itemId];
+    while (cur && cur.parentId) cur = itemMap[cur.parentId];
+    return cur?.id || itemId;
+  }, [itemMap]);
+
+  const topLevelItems = useMemo(() => db.items.filter(i => !i.parentId), [db.items]);
 
   // balances per wallet
   const walletBalances = useMemo(() => {
@@ -172,18 +238,56 @@ function useDerived(db /** @type {DB} */) {
     return Array.from(m.entries()).map(([id, value]) => ({ name: itemMap[id]?.name || "Unknown", value }));
   }, [db.txs, itemMap]);
 
+  const actualByTopLevelForMonth = useCallback((month) => {
+    const sums = new Map();
+    for (const t of db.txs) {
+      if (t.date.slice(0,7) !== month) continue;
+      const root = getRootId(t.itemId);
+      const rootItem = itemMap[root];
+      if (!rootItem) continue;
+      const prev = sums.get(root) || { amount: 0, type: rootItem.type };
+      sums.set(root, { amount: prev.amount + Math.abs(t.amount), type: rootItem.type });
+    }
+    return Array.from(sums.entries()).map(([itemId, v]) => ({ itemId, ...v }));
+  }, [db.txs, itemMap, getRootId]);
+
+  const budgetByTopLevelForMonth = useCallback((month) => {
+    const sums = new Map();
+    for (const b of db.budgets || []) {
+      if (b.month !== month) continue;
+      const root = getRootId(b.itemId);
+      sums.set(root, (sums.get(root) || 0) + Math.max(0, Number(b.amount) || 0));
+    }
+    return sums;
+  }, [db.budgets, getRootId]);
+
   const currentMonth = new Date().toISOString().slice(0, 7);
   const monthEntry = monthly.find(m => m.month === currentMonth) || { income: 0, expense: 0 };
   const netThisMonth = monthEntry.income - monthEntry.expense;
   const expenseIncomeRatio = monthEntry.income ? monthEntry.expense / monthEntry.income : 0;
 
-  return { itemMap, walletMap, walletBalances, totals, monthly, expenseByItem, netThisMonth, expenseIncomeRatio };
+  return {
+    itemMap,
+    childrenMap,
+    isLeaf,
+    getRootId,
+    topLevelItems,
+    walletMap,
+    walletBalances,
+    totals,
+    monthly,
+    expenseByItem,
+    actualByTopLevelForMonth,
+    budgetByTopLevelForMonth,
+    netThisMonth,
+    expenseIncomeRatio,
+  };
 }
 
 // ------------------------- App -------------------------
 export default function App() {
-  const { db, addTx, updTx, delTx, upsertItem, delItem, upsertWallet, delWallet, resetDemo, importDB } = useDB();
-  const { itemMap, walletMap, walletBalances, totals, monthly, expenseByItem, netThisMonth, expenseIncomeRatio } = useDerived(db);
+  const { db, addTx, updTx, delTx, upsertItem, delItem, upsertWallet, delWallet, upsertBudget, delBudget, resetDemo, importDB } = useDB();
+  const { itemMap, walletMap, walletBalances, totals, monthly, expenseByItem, actualByTopLevelForMonth, budgetByTopLevelForMonth, isLeaf, netThisMonth, expenseIncomeRatio } = useDerived(db);
 
   const [tab, setTab] = useState(/** @type {"dashboard"|"transactions"|"items"|"wallets"} */("dashboard"));
   const [search, setSearch] = useState("");
@@ -244,7 +348,7 @@ export default function App() {
           {[
             { id: "dashboard", label: "Dashboard" },
             { id: "transactions", label: "Transactions" },
-            { id: "items", label: "Articles" },
+            { id: "items", label: "Items" },
             { id: "wallets", label: "Wallets" },
           ].map(t => (
             <button
@@ -256,7 +360,15 @@ export default function App() {
         </nav>
 
           {tab === "dashboard" && (
-            <Dashboard txs={db.txs} items={db.items} totals={totals} />
+            <Dashboard
+              items={db.items}
+              totals={totals}
+              monthly={monthly}
+              budgets={db.budgets}
+              upsertBudget={upsertBudget}
+              actualByTopLevelForMonth={actualByTopLevelForMonth}
+              budgetByTopLevelForMonth={budgetByTopLevelForMonth}
+            />
           )}
 
 
@@ -274,6 +386,7 @@ export default function App() {
             walletMap={walletMap}
             search={search}
             setSearch={setSearch}
+            isLeaf={isLeaf}
           />
         )}
 
@@ -315,7 +428,7 @@ function SummaryRow({ totals }) {
 // function DashboardPanel removed for new Dashboard
 
 // ------------------------- Transactions -------------------------
-function TransactionsPanel({ txs, items, wallets, addTx, updTx, delTx, itemMap, walletMap, search, setSearch }) {
+function TransactionsPanel({ txs, items, wallets, addTx, updTx, delTx, itemMap, walletMap, search, setSearch, isLeaf }) {
   const [editingId, setEditingId] = useState(null); // null | string
   const [isAdding, setIsAdding] = useState(false);
 
@@ -399,6 +512,7 @@ function TransactionsPanel({ txs, items, wallets, addTx, updTx, delTx, itemMap, 
             onSave={onSave}
             items={items}
             wallets={wallets}
+            isLeaf={isLeaf}
           />
         </Modal>
       )}
@@ -431,7 +545,7 @@ const TransactionRow = React.memo(function TransactionRow({ t, item, wallet, onE
   );
 });
 
-function TransactionForm({ tx, onSave, items, wallets }) {
+function TransactionForm({ tx, onSave, items, wallets, isLeaf }) {
   const [date, setDate] = useState(tx?.date || new Date().toISOString().slice(0,10));
   const [type, setType] = useState(tx?.type || "expense");
   const [amount, setAmount] = useState(tx?.amount?.toString() || "");
@@ -439,7 +553,7 @@ function TransactionForm({ tx, onSave, items, wallets }) {
   const [walletId, setWalletId] = useState(tx?.walletId || (wallets[0]?.id || ""));
   const [comment, setComment] = useState(tx?.comment || "");
 
-  const filteredItems = useMemo(() => items.filter(i=>i.type===type), [items, type]);
+  const filteredItems = useMemo(() => items.filter(i=>i.type===type && isLeaf(i.id)), [items, type, isLeaf]);
 
   useEffect(()=>{ if (!filteredItems.find(i=>i.id===itemId)) setItemId(""); }, [filteredItems, itemId]);
 
@@ -497,7 +611,13 @@ function ItemsPanel({ items, upsertItem, delItem }) {
 
   const filtered = useMemo(() => items.filter(i=> filter === "all" || i.type === filter), [items, filter]);
 
-  const onDelete = useCallback((id) => { if (confirm("Delete this article? Transactions using it will show blank name.")) delItem(id); }, [delItem]);
+  const onDelete = useCallback((id) => {
+    if (items.some(i => i.parentId === id)) {
+      alert("This item has sub-items. Reassign or delete its sub-items first.");
+      return;
+    }
+    if (confirm("Delete this item? Transactions using it will show blank name.")) delItem(id);
+  }, [items, delItem]);
 
   return (
     <div className="space-y-4">
@@ -508,7 +628,7 @@ function ItemsPanel({ items, upsertItem, delItem }) {
           <TabPill active={filter==="expense"} onClick={()=>setFilter("expense")} label="Expense" />
         </div>
         <div className="flex-1" />
-        <button onClick={()=>setEditing("new")} className="px-4 py-2 rounded-2xl bg-gray-900 text-white shadow">+ Add article</button>
+        <button onClick={()=>setEditing("new")} className="px-4 py-2 rounded-2xl bg-gray-900 text-white shadow">+ Add item</button>
       </div>
 
       <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
@@ -522,7 +642,7 @@ function ItemsPanel({ items, upsertItem, delItem }) {
           </thead>
           <tbody>
             {filtered.length===0 && (
-              <tr><td colSpan={3} className="p-6 text-center text-gray-500">No articles yet. Add your first one!</td></tr>
+              <tr><td colSpan={3} className="p-6 text-center text-gray-500">No items yet. Add your first one!</td></tr>
             )}
             {filtered.map(i => (
               <tr key={i.id} className="border-t">
@@ -545,6 +665,7 @@ function ItemsPanel({ items, upsertItem, delItem }) {
           <ItemForm
             item={editing!=="new" ? items.find(x=>x.id===editing) : undefined}
             onSave={(rec)=>{ upsertItem(rec); setEditing(null); }}
+            allItems={items}
           />
         </Modal>
       )}
@@ -552,19 +673,22 @@ function ItemsPanel({ items, upsertItem, delItem }) {
   );
 }
 
-function ItemForm({ item, onSave }) {
+function ItemForm({ item, onSave, allItems }) {
   const [name, setName] = useState(item?.name || "");
   const [type, setType] = useState(item?.type || "expense");
+  const [parentId, setParentId] = useState(item?.parentId || "");
+
+  const candidates = useMemo(() => allItems.filter(i => i.type === type && i.id !== item?.id), [allItems, type, item?.id]);
 
   const submit = useCallback((e) => {
     e.preventDefault();
     if (!name.trim()) { alert("Enter name"); return; }
-    onSave({ id: item?.id || uid(), name: name.trim(), type });
-  }, [name, type, onSave, item?.id]);
+    onSave({ id: item?.id || uid(), name: name.trim(), type, parentId: parentId || null });
+  }, [name, type, parentId, onSave, item?.id]);
 
   return (
     <form onSubmit={submit} className="w-[92vw] max-w-md">
-      <h3 className="text-lg font-semibold mb-3">{item?"Edit article":"Add article"}</h3>
+      <h3 className="text-lg font-semibold mb-3">{item?"Edit item":"Add item"}</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 text-sm">Name
           <input value={name} onChange={e=>setName(e.target.value)} className="rounded-xl border px-3 py-2" placeholder="e.g. Groceries" required />
@@ -573,6 +697,12 @@ function ItemForm({ item, onSave }) {
           <select value={type} onChange={e=>setType(e.target.value)} className="rounded-xl border px-3 py-2">
             <option value="income">Income</option>
             <option value="expense">Expense</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm md:col-span-2">Parent
+          <select value={parentId} onChange={e=>setParentId(e.target.value)} className="rounded-xl border px-3 py-2">
+            <option value="">(none)</option>
+            {candidates.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
         </label>
       </div>
