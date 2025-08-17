@@ -83,7 +83,7 @@ export default function Dashboard({ items, totals, monthly, upsertBudget, actual
         <KPI title="Total Balance" value={fmtInt(totals.totalBalance)} positive />
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+<div className="grid md:grid-cols-2 gap-6">
         <div className="h-[340px]" aria-label="Monthly Income vs Expenses">
           {monthlySeries.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
