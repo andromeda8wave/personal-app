@@ -609,7 +609,26 @@ function ItemsPanel({ items, upsertItem, delItem }) {
   const [filter, setFilter] = useState("all");
   const [editing, setEditing] = useState(null);
 
-  const filtered = useMemo(() => items.filter(i=> filter === "all" || i.type === filter), [items, filter]);
+  const grouped = useMemo(() => {
+    const filtered = items.filter(i => filter === "all" || i.type === filter);
+    const map = new Map(); // parentId|null -> Item[]
+    for (const i of filtered) {
+      const p = i.parentId || null;
+      if (!map.has(p)) map.set(p, []);
+      map.get(p).push(i);
+    }
+    const res = [];
+    const walk = (parentId, depth) => {
+      const arr = map.get(parentId) || [];
+      arr.sort((a, b) => a.name.localeCompare(b.name));
+      for (const item of arr) {
+        res.push({ item, depth });
+        walk(item.id, depth + 1);
+      }
+    };
+    walk(null, 0);
+    return res;
+  }, [items, filter]);
 
   const onDelete = useCallback((id) => {
     if (items.some(i => i.parentId === id)) {
@@ -641,12 +660,14 @@ function ItemsPanel({ items, upsertItem, delItem }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.length===0 && (
+            {grouped.length === 0 && (
               <tr><td colSpan={3} className="p-6 text-center text-gray-500">No items yet. Add your first one!</td></tr>
             )}
-            {filtered.map(i => (
+            {grouped.map(({ item: i, depth }) => (
               <tr key={i.id} className="border-t">
-                <Td>{i.name}</Td>
+                <Td>
+                  <div style={{ paddingLeft: depth * 16 }}>{i.name}</div>
+                </Td>
                 <Td>
                   <span className={cls("px-2 py-1 rounded-full text-xs font-medium", i.type==="income"?"bg-emerald-50 text-emerald-700":"bg-rose-50 text-rose-700")}>{i.type}</span>
                 </Td>
