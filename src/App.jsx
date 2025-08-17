@@ -48,6 +48,7 @@ const DEMO_DB /** @type {DB} */ = {
 // ------------------------- Utilities -------------------------
 const cls = (...a) => a.filter(Boolean).join(" ");
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const TX_COLS = "min-w-[720px] grid grid-cols-[7rem_5rem_8rem_12rem_12rem_1fr_8rem]";
 
 function tryParseJSON(text) {
   try { return JSON.parse(text); } catch { return null; }
@@ -243,6 +244,7 @@ export default function App() {
           {[
             { id: "dashboard", label: "Dashboard" },
             { id: "transactions", label: "Transactions" },
+            { id: "items", label: "Articles" },
             { id: "wallets", label: "Wallets" },
           ].map(t => (
             <button
@@ -352,41 +354,41 @@ function TransactionsPanel({ txs, items, wallets, addTx, updTx, delTx, itemMap, 
       </div>
 
       <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
-        <div ref={containerRef} onScroll={onScroll} style={{ maxHeight: containerHeight, overflow: "auto" }}>
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600 sticky top-0">
-              <tr>
-                <Th>Date</Th>
-                <Th>Type</Th>
-                <Th className="text-right">Amount</Th>
-                <Th>Item</Th>
-                <Th>Wallet</Th>
-                <Th>Comment</Th>
-                <Th className="text-right">Actions</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {txs.length === 0 && (
-                <tr><td colSpan={7} className="p-6 text-center text-gray-500">No transactions yet. Add your first one!</td></tr>
-              )}
-              {txs.length > 0 && (
-                <>
-                  {topPad > 0 && <tr style={{ height: topPad }}><td colSpan={7} /></tr>}
-                  {visible.map(t => (
-                    <TransactionRow
-                      key={t.id}
-                      t={t}
-                      item={itemMap[t.itemId]}
-                      wallet={walletMap[t.walletId]}
-                      onEdit={openEdit}
-                      onDelete={onDelete}
-                    />
-                  ))}
-                  {bottomPad > 0 && <tr style={{ height: bottomPad }}><td colSpan={7} /></tr>}
-                </>
-              )}
-            </tbody>
-          </table>
+        <div
+          ref={containerRef}
+          onScroll={onScroll}
+          style={{ maxHeight: containerHeight, overflow: "auto" }}
+        >
+          <div className={cls("sticky top-0 bg-gray-50 text-gray-600", TX_COLS)}>
+            <div className="p-3 text-left text-xs font-semibold uppercase tracking-wide">Date</div>
+            <div className="p-3 text-left text-xs font-semibold uppercase tracking-wide">Type</div>
+            <div className="p-3 text-right text-xs font-semibold uppercase tracking-wide">Amount</div>
+            <div className="p-3 text-left text-xs font-semibold uppercase tracking-wide">Item</div>
+            <div className="p-3 text-left text-xs font-semibold uppercase tracking-wide">Wallet</div>
+            <div className="p-3 text-left text-xs font-semibold uppercase tracking-wide">Comment</div>
+            <div className="p-3 text-right text-xs font-semibold uppercase tracking-wide">Actions</div>
+          </div>
+
+          {txs.length === 0 && (
+            <div className="p-6 text-center text-gray-500">No transactions yet. Add your first one!</div>
+          )}
+
+          {txs.length > 0 && (
+            <>
+              {topPad > 0 && <div style={{ height: topPad }} />}
+              {visible.map(t => (
+                <TransactionRow
+                  key={t.id}
+                  t={t}
+                  item={itemMap[t.itemId]}
+                  wallet={walletMap[t.walletId]}
+                  onEdit={openEdit}
+                  onDelete={onDelete}
+                />
+              ))}
+              {bottomPad > 0 && <div style={{ height: bottomPad }} />}
+            </>
+          )}
         </div>
       </div>
 
@@ -409,20 +411,23 @@ const Td = React.memo(function Td({ children, className }) { return <td classNam
 
 const TransactionRow = React.memo(function TransactionRow({ t, item, wallet, onEdit, onDelete }) {
   return (
-    <tr className="border-t">
-      <Td>{t.date}</Td>
-      <Td>
-        <span className={cls("px-2 py-1 rounded-full text-xs font-medium", t.type==="income"?"bg-emerald-50 text-emerald-700":"bg-rose-50 text-rose-700")}>{t.type}</span>
-      </Td>
-      <Td className={cls("text-right", t.type==="income"?"text-emerald-700":"text-rose-700")}>{formatMoney(t.amount, wallet?.currency)}</Td>
-      <Td>{item?.name || "—"}</Td>
-      <Td>{wallet?.name || "—"}</Td>
-      <Td className="max-w-[14rem] truncate" title={t.comment||""}>{t.comment}</Td>
-      <Td className="text-right">
+    <div className={cls("border-t", TX_COLS)}>
+      <div className="p-3">{t.date}</div>
+      <div className="p-3">
+        <span className={cls(
+          "px-2 py-1 rounded-full text-xs font-medium",
+          t.type === "income" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+        )}>{t.type}</span>
+      </div>
+      <div className={cls("p-3 text-right", t.type === "income" ? "text-emerald-700" : "text-rose-700")}>{formatMoney(t.amount, wallet?.currency)}</div>
+      <div className="p-3">{item?.name || "—"}</div>
+      <div className="p-3">{wallet?.name || "—"}</div>
+      <div className="p-3 max-w-[14rem] truncate" title={t.comment||""}>{t.comment}</div>
+      <div className="p-3 text-right">
         <button onClick={()=>onEdit(t.id)} className="px-2 py-1 text-xs rounded-lg border mr-2 hover:bg-gray-50">Edit</button>
         <button onClick={()=>onDelete(t.id)} className="px-2 py-1 text-xs rounded-lg border hover:bg-gray-50">Delete</button>
-      </Td>
-    </tr>
+      </div>
+    </div>
   );
 });
 
@@ -492,7 +497,7 @@ function ItemsPanel({ items, upsertItem, delItem }) {
 
   const filtered = useMemo(() => items.filter(i=> filter === "all" || i.type === filter), [items, filter]);
 
-  const onDelete = useCallback((id) => { if (confirm("Delete this item? Transactions using it will show blank name.")) delItem(id); }, [delItem]);
+  const onDelete = useCallback((id) => { if (confirm("Delete this article? Transactions using it will show blank name.")) delItem(id); }, [delItem]);
 
   return (
     <div className="space-y-4">
@@ -503,7 +508,7 @@ function ItemsPanel({ items, upsertItem, delItem }) {
           <TabPill active={filter==="expense"} onClick={()=>setFilter("expense")} label="Expense" />
         </div>
         <div className="flex-1" />
-        <button onClick={()=>setEditing("new")} className="px-4 py-2 rounded-2xl bg-gray-900 text-white shadow">+ Add item</button>
+        <button onClick={()=>setEditing("new")} className="px-4 py-2 rounded-2xl bg-gray-900 text-white shadow">+ Add article</button>
       </div>
 
       <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
@@ -517,7 +522,7 @@ function ItemsPanel({ items, upsertItem, delItem }) {
           </thead>
           <tbody>
             {filtered.length===0 && (
-              <tr><td colSpan={3} className="p-6 text-center text-gray-500">No items yet. Add your first one!</td></tr>
+              <tr><td colSpan={3} className="p-6 text-center text-gray-500">No articles yet. Add your first one!</td></tr>
             )}
             {filtered.map(i => (
               <tr key={i.id} className="border-t">
@@ -559,7 +564,7 @@ function ItemForm({ item, onSave }) {
 
   return (
     <form onSubmit={submit} className="w-[92vw] max-w-md">
-      <h3 className="text-lg font-semibold mb-3">{item?"Edit item":"Add item"}</h3>
+      <h3 className="text-lg font-semibold mb-3">{item?"Edit article":"Add article"}</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label className="flex flex-col gap-1 text-sm">Name
           <input value={name} onChange={e=>setName(e.target.value)} className="rounded-xl border px-3 py-2" placeholder="e.g. Groceries" required />
