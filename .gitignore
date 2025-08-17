@@ -1,0 +1,7 @@
+node_modules
+.vite
+dist
+*.log
+.DS_Store
+personalappkey
+personalappkey.pub
