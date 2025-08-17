@@ -24,21 +24,26 @@ export function buildMonthlySeries(txs, from, to) {
 export function buildExpenseStructure(txs, items, from, to) {
   const start = from ? new Date(from) : new Date(new Date().getFullYear(), 0, 1);
   const end = to ? new Date(to) : new Date();
-  const itemMap = new Map(items.map(i=>[i.id, i.name]));
+  const itemMap = new Map(items.map(i => [i.id, i]));
+  const topName = (id) => {
+    let item = itemMap.get(id);
+    while (item && item.parentId) item = itemMap.get(item.parentId);
+    return item?.name || 'Unknown';
+  };
   const m = new Map();
   for (const t of txs) {
     if (t.type !== 'expense') continue;
     const d = new Date(t.date);
     if (d < start || d > end) continue;
-    const name = itemMap.get(t.itemId) || 'Unknown';
+    const name = topName(t.itemId);
     m.set(name, (m.get(name) || 0) + t.amount);
   }
-  const total = Array.from(m.values()).reduce((s,v)=>s+v,0);
+  const total = Array.from(m.values()).reduce((s, v) => s + v, 0);
   if (!total) return [];
-  return Array.from(m.entries()).map(([item, amount])=>({
+  return Array.from(m.entries()).map(([item, amount]) => ({
     item,
     amount,
-    share: Math.round(amount/total*100)
+    share: Math.round((amount / total) * 100)
   }));
 }
 

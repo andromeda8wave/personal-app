@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  LineChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, CartesianGrid
 } from 'recharts';
 import { fmtInt, fmtMonthLabel } from './format';
+import { buildExpenseStructure } from './analytics';
 
 const COLORS = ['#10B981','#F43F5E','#3B82F6','#F59E0B','#6366F1','#14B8A6','#8B5CF6','#F97316'];
 const colorFor = (name) => {
@@ -19,7 +20,7 @@ const KPI = ({ title, value, positive }) => (
   </div>
 );
 
-export default function Dashboard({ items, totals, monthly, upsertBudget, actualByTopLevelForMonth, budgetByTopLevelForMonth }) {
+export default function Dashboard({ items, txs, totals, monthly, upsertBudget, actualByTopLevelForMonth, budgetByTopLevelForMonth }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0,7));
 
   const monthlySeries = useMemo(() => monthly.map(m => ({
@@ -28,16 +29,7 @@ export default function Dashboard({ items, totals, monthly, upsertBudget, actual
     expense: Math.round(m.expense),
   })), [monthly]);
 
-  const expenseStructure = useMemo(() => {
-    const arr = actualByTopLevelForMonth(month).filter(r => r.type === 'expense');
-    const total = arr.reduce((s, r) => s + r.amount, 0);
-    if (!total) return [];
-    return arr.map(r => ({
-      item: items.find(i => i.id === r.itemId)?.name || 'Unknown',
-      amount: Math.round(r.amount),
-      share: Math.round(r.amount / total * 100)
-    }));
-  }, [actualByTopLevelForMonth, month, items]);
+  const expenseStructure = useMemo(() => buildExpenseStructure(txs, items), [txs, items]);
 
   const actualMap = useMemo(() => {
     const m = new Map();
@@ -83,34 +75,64 @@ export default function Dashboard({ items, totals, monthly, upsertBudget, actual
         <KPI title="Total Balance" value={fmtInt(totals.totalBalance)} positive />
       </div>
 
-<div className="grid md:grid-cols-2 gap-6">
-        <div className="h-[340px]" aria-label="Monthly Income vs Expenses">
+      <div className="grid gap-6 md:grid-cols-3">
+        <div className="h-[480px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-2" aria-label="Monthly Income vs Expenses">
           {monthlySeries.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlySeries}>
+              <LineChart data={monthlySeries} margin={{ top: 60, right: 20, left: 40, bottom: 60 }}>
+                <defs>
+                  <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F43F5E" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#F43F5E" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="label" />
+                <XAxis dataKey="label" interval={0} angle={-45} textAnchor="end" height={80} tickMargin={16} />
                 <YAxis tickFormatter={v=>fmtInt(v)} />
                 <Tooltip formatter={v=>fmtInt(v)} />
-                <Legend />
-                <Line type="monotone" dataKey="income" name="Income" stroke="#10B981" dot={false} strokeWidth={2} />
-                <Line type="monotone" dataKey="expense" name="Expense" stroke="#F43F5E" dot={false} strokeWidth={2} />
+                <Legend verticalAlign="top" height={36} />
+                <Area type="natural" dataKey="income" stroke="none" fill="url(#incomeFill)" />
+                <Area type="natural" dataKey="expense" stroke="none" fill="url(#expenseFill)" />
+                <Line type="natural" dataKey="income" name="Income" stroke="#10B981" dot={false} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                <Line type="natural" dataKey="expense" name="Expense" stroke="#F43F5E" dot={false} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
               </LineChart>
             </ResponsiveContainer>
           )}
         </div>
-        <div className="h-[340px]" aria-label="Expense Structure">
+        <div className="h-[320px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-1" aria-label="Expense Structure">
           {expenseStructure.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={expenseStructure} dataKey="share" nameKey="item" label={({item,share})=>`${item} — ${share}%`}>
-                  {expenseStructure.map(e => <Cell key={e.item} fill={colorFor(e.item)} />)}
+                <Pie
+                  data={expenseStructure}
+                  dataKey="share"
+                  nameKey="item"
+                  innerRadius="60%"
+                  outerRadius="80%"
+                  paddingAngle={2}
+                >
+                  {expenseStructure.map(e => (
+                    <Cell key={e.item} fill={colorFor(e.item)} />
+                  ))}
                 </Pie>
-                <Tooltip formatter={(v,name,props)=>fmtInt(props.payload.amount)} />
+                <Tooltip formatter={(v, name, props) => fmtInt(props.payload.amount)} />
+                <Legend
+                  layout="horizontal"
+                  verticalAlign="bottom"
+                  align="center"
+                  formatter={(value) => {
+                    const share = expenseStructure.find(e => e.item === value)?.share;
+                    return `${value} (${share}%)`;
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           )}
