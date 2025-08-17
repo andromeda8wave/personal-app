@@ -362,6 +362,7 @@ export default function App() {
           {tab === "dashboard" && (
             <Dashboard
               items={db.items}
+              txs={db.txs}
               totals={totals}
               monthly={monthly}
               budgets={db.budgets}
