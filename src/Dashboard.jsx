@@ -56,7 +56,7 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
             min="0"
             step="1"
             value={plan}
-            onChange={e => upsertBudget({ itemId: item.id, month, amount: Number(e.target.value) || 0 })}
+            onChange={e => upsertBudget({ itemId: item.id, period: month, amount: Number(e.target.value) || 0 })}
             className="w-20 border rounded px-1 text-right"
           />
         </td>
