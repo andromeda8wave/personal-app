@@ -76,7 +76,7 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <div className="h-[440px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-2" aria-label="Monthly Income vs Expenses">
+        <div className="h-[400px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-2" aria-label="Monthly Income vs Expenses">
           {monthlySeries.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
@@ -105,7 +105,7 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
             </ResponsiveContainer>
           )}
         </div>
-        <div className="h-[360px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-1" aria-label="Expense Structure">
+        <div className="h-[400px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-1" aria-label="Expense Structure">
           {expenseStructure.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
@@ -118,21 +118,14 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
                   innerRadius="60%"
                   outerRadius="80%"
                   paddingAngle={2}
+                  labelLine
+                  label={({ name, value }) => `${name}: ${value}% (2025)`}
                 >
                   {expenseStructure.map(e => (
                     <Cell key={e.item} fill={colorFor(e.item)} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v, name, props) => fmtInt(props.payload.amount)} />
-                <Legend
-                  layout="horizontal"
-                  verticalAlign="bottom"
-                  align="center"
-                  formatter={(value) => {
-                    const share = expenseStructure.find(e => e.item === value)?.share;
-                    return `${value} (${share}%)`;
-                  }}
-                />
               </PieChart>
             </ResponsiveContainer>
           )}
