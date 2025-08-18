@@ -56,7 +56,7 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
             min="0"
             step="1"
             value={plan}
-            onChange={e => upsertBudget({ itemId: item.id, period: month, amount: Number(e.target.value) || 0 })}
+            onChange={e => upsertBudget({ itemId: item.id, month, amount: Number(e.target.value) || 0 })}
             className="w-20 border rounded px-1 text-right"
           />
         </td>
@@ -118,14 +118,19 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
                   innerRadius="60%"
                   outerRadius="80%"
                   paddingAngle={2}
-                  labelLine
-                  label={({ name, value }) => `${name}: ${value}% (2025)`}
                 >
                   {expenseStructure.map(e => (
                     <Cell key={e.item} fill={colorFor(e.item)} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(v, name, props) => fmtInt(props.payload.amount)} />
+                <Legend
+                  layout="horizontal"
+                  verticalAlign="bottom"
+                  height={36}
+                  wrapperStyle={{ fontSize: 12 }}
+                  formatter={(value, entry) => `${value}: ${entry.payload.share}%`}
+                />
               </PieChart>
             </ResponsiveContainer>
           )}
