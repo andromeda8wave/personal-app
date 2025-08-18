@@ -76,7 +76,7 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <div className="h-[480px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-2" aria-label="Monthly Income vs Expenses">
+        <div className="h-[440px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-2" aria-label="Monthly Income vs Expenses">
           {monthlySeries.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
@@ -105,12 +105,12 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
             </ResponsiveContainer>
           )}
         </div>
-        <div className="h-[320px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-1" aria-label="Expense Structure">
+        <div className="h-[360px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-1" aria-label="Expense Structure">
           {expenseStructure.length === 0 ? (
             <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart margin={{ bottom: 40 }}>
                 <Pie
                   data={expenseStructure}
                   dataKey="share"
