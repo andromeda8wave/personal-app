@@ -76,12 +76,12 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <div className="h-[400px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-2" aria-label="Monthly Income vs Expenses">
+        <div className="rounded-2xl border bg-white p-4 shadow-sm md:col-span-2" aria-label="Monthly Income vs Expenses">
           {monthlySeries.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
+            <div className="min-h-[200px] flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlySeries} margin={{ top: 60, right: 20, left: 40, bottom: 60 }}>
+            <ResponsiveContainer width="100%" aspect={2}>
+              <LineChart data={monthlySeries} margin={{ top: 20, right: 20, left: 40, bottom: 20 }}>
                 <defs>
                   <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
@@ -94,7 +94,7 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="label" interval={0} angle={-45} textAnchor="end" height={80} tickMargin={16} />
-                <YAxis tickFormatter={v=>fmtInt(v)} />
+                <YAxis tickFormatter={v=>fmtInt(v)} domain={['dataMin', 'dataMax']} />
                 <Tooltip formatter={v=>fmtInt(v)} />
                 <Legend verticalAlign="top" height={36} />
                 <Area type="natural" dataKey="income" stroke="none" fill="url(#incomeFill)" />
@@ -105,11 +105,11 @@ export default function Dashboard({ items, txs, totals, monthly, upsertBudget, a
             </ResponsiveContainer>
           )}
         </div>
-        <div className="h-[400px] rounded-2xl border bg-white p-4 shadow-sm md:col-span-1" aria-label="Expense Structure">
+        <div className="rounded-2xl border bg-white p-4 shadow-sm md:col-span-1" aria-label="Expense Structure">
           {expenseStructure.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-gray-500">No data yet.</div>
+            <div className="min-h-[200px] flex items-center justify-center text-gray-500">No data yet.</div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" aspect={1}>
               <PieChart margin={{ bottom: 40 }}>
                 <Pie
                   data={expenseStructure}
