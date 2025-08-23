@@ -1,6 +1,5 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import Dashboard from "./Dashboard";
-import Profile from "./Profile.jsx";
 
 // =============================================================
 // Canvas Finance Tracker — v1.1 (senior refactor: structure + perf)
@@ -18,8 +17,7 @@ import Profile from "./Profile.jsx";
 
 // ------------------------- Constants & Types -------------------------
 const DB_KEY = "cft_db_v2"; // bump when schema changes
-let APP_CURRENCY = "RUB"; // default when wallet currency missing
-const PROFILE_KEY = "cft_profile_v1";
+const APP_CURRENCY = "RUB"; // default when wallet currency missing
 
 /** @typedef {"income"|"expense"} TxType */
 /** @typedef {{ id:string, name:string, type:TxType, parentId?:string|null }} Item */
@@ -97,36 +95,6 @@ function loadDB() {
 
 function saveDB(db /** @type {DB} */) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
-}
-
-const DEFAULT_PROFILE = {
-  firstName: "",
-  lastName: "",
-  about: "",
-  avatar: null,
-  settings: { lang: "en", theme: "system", currency: "RUB" }
-};
-
-function loadProfile() {
-  try {
-    const raw = localStorage.getItem(PROFILE_KEY);
-    if (!raw) return DEFAULT_PROFILE;
-    const p = JSON.parse(raw);
-    return { ...DEFAULT_PROFILE, ...p, settings: { ...DEFAULT_PROFILE.settings, ...(p.settings||{}) } };
-  } catch {
-    alert("Profile corrupted, resetting to defaults");
-    return DEFAULT_PROFILE;
-  }
-}
-
-function saveProfile(p) {
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
-}
-
-function useProfile() {
-  const [profile, setProfile] = useState(() => loadProfile());
-  useEffect(() => { saveProfile(profile); }, [profile]);
-  return { profile, setProfile };
 }
 
 function formatMoney(amount, currency = APP_CURRENCY) {
@@ -319,31 +287,12 @@ function useDerived(db /** @type {DB} */) {
 // ------------------------- App -------------------------
 export default function App() {
   const { db, addTx, updTx, delTx, upsertItem, delItem, upsertWallet, delWallet, upsertBudget, delBudget, resetDemo, importDB } = useDB();
-  const { profile, setProfile } = useProfile();
   const { itemMap, walletMap, walletBalances, totals, monthly, expenseByItem, actualByTopLevelForMonth, budgetByTopLevelForMonth, isLeaf, netThisMonth, expenseIncomeRatio } = useDerived(db);
 
-  const navInitials = `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`.toUpperCase() || '?';
-
-  const [tab, setTab] = useState(/** @type {"dashboard"|"transactions"|"items"|"wallets"|"profile"} */("dashboard"));
+  const [tab, setTab] = useState(/** @type {"dashboard"|"transactions"|"items"|"wallets"} */("dashboard"));
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 250);
   const slowSearch = useDeferredValue(debouncedSearch);
-
-  useEffect(() => {
-    document.documentElement.lang = profile.settings.lang;
-    const apply = () => {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const dark = profile.settings.theme === "dark" || (profile.settings.theme === "system" && prefersDark);
-      document.documentElement.classList.toggle("dark", dark);
-    };
-    apply();
-    if (profile.settings.theme === "system") {
-      const mq = window.matchMedia("(prefers-color-scheme: dark)");
-      mq.addEventListener("change", apply);
-      return () => mq.removeEventListener("change", apply);
-    }
-    APP_CURRENCY = profile.settings.currency || APP_CURRENCY;
-  }, [profile.settings.lang, profile.settings.theme, profile.settings.currency]);
 
   // filter & sort txs efficiently
   const filteredTxs = useMemo(() => {
@@ -376,14 +325,38 @@ export default function App() {
 
   const onImport = useCallback((data) => importDB(data), [importDB]);
 
+  const onHardReset = useCallback(() => {
+    if (confirm("This will erase ALL local data. Continue?")) resetDemo();
+  }, [resetDemo]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-2 sm:p-4 md:p-8 pb-24">
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-2 sm:p-4 md:p-8">
       <div className="mx-auto w-full max-w-md md:max-w-6xl">
-        <header className="mb-6">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Canvas Finance Tracker</h1>
-          <p className="text-sm text-gray-500">Transactions · Items · Wallets — local & private</p>
+        <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Canvas Finance Tracker</h1>
+            <p className="text-sm text-gray-500">Transactions · Items · Wallets — local & private</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={onHardReset} className="px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50">Reset demo</button>
+            <button onClick={onExport} className="px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50">Export JSON</button>
+            <ImportButton onImport={onImport} />
+          </div>
         </header>
+        <nav className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-2 md:w-[48rem]">
+          {[
+            { id: "dashboard", label: "Dashboard" },
+            { id: "transactions", label: "Transactions" },
+            { id: "items", label: "Items" },
+            { id: "wallets", label: "Wallets" },
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(/** @type any */(t.id))}
+              className={cls("px-4 py-2 rounded-2xl text-sm font-medium border shadow-sm", tab === t.id ? "bg-gray-900 text-white" : "bg-white hover:bg-gray-50")}
+            >{t.label}</button>
+          ))}
+        </nav>
 
           {tab === "dashboard" && (
             <Dashboard
@@ -425,28 +398,8 @@ export default function App() {
           <WalletsPanel wallets={db.wallets} upsertWallet={upsertWallet} delWallet={delWallet} walletBalances={walletBalances} />
         )}
 
-        {tab === "profile" && (
-          <Profile
-            profile={profile}
-            setProfile={setProfile}
-            onExport={onExport}
-            onImport={onImport}
-            onReset={resetDemo}
-            db={db}
-          />
-        )}
-
         <footer className="mt-10 text-xs text-gray-400">Data is stored locally in your browser (localStorage). No server involved.</footer>
       </div>
-      <nav className="fixed bottom-0 inset-x-0 bg-white border-t shadow-sm grid grid-cols-5 text-sm">
-        {[{id:"dashboard",label:"Dashboard"},{id:"transactions",label:"Transactions"},{id:"items",label:"Items"},{id:"wallets",label:"Wallets"},{id:"profile",label:"Profile"}].map(t => (
-          <button key={t.id} onClick={() => setTab(/** @type any */(t.id))} className={cls("py-2", tab === t.id ? "text-blue-600" : "text-gray-600")}>
-            {t.id === "profile" ? (
-              profile.avatar ? <img src={profile.avatar} alt="avatar" className="mx-auto w-6 h-6 rounded-full" /> : <span className="inline-block w-6 h-6 rounded-full bg-gray-200 text-center leading-6">{navInitials}</span>
-            ) : t.label}
-          </button>
-        ))}
-      </nav>
     </div>
   );
 }
@@ -897,7 +850,7 @@ function Modal({ children, onClose }) {
   );
 }
 
-export function ImportButton({ onImport }) {
+function ImportButton({ onImport }) {
   const onChange = useCallback((e) => {
     const f = e.target.files?.[0]; if (!f) return;
     const reader = new FileReader();
