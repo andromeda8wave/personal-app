@@ -330,11 +330,11 @@ export default function App() {
   }, [resetDemo]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-8">
-      <div className="mx-auto max-w-6xl">
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-2 sm:p-4 md:p-8">
+      <div className="mx-auto w-full max-w-md md:max-w-6xl">
         <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Canvas Finance Tracker</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Canvas Finance Tracker</h1>
             <p className="text-sm text-gray-500">Transactions · Items · Wallets — local & private</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
