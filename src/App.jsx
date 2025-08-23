@@ -50,7 +50,7 @@ const DEMO_DB /** @type {DB} */ = {
 // ------------------------- Utilities -------------------------
 const cls = (...a) => a.filter(Boolean).join(" ");
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-const TX_COLS = "min-w-[720px] grid grid-cols-[7rem_5rem_8rem_12rem_12rem_1fr_8rem]";
+const TX_COLS = "min-w-[640px] sm:min-w-[720px] grid grid-cols-[5rem_4rem_6rem_10rem_10rem_1fr_6rem] sm:grid-cols-[7rem_5rem_8rem_12rem_12rem_1fr_8rem]";
 
 function tryParseJSON(text) {
   try { return JSON.parse(text); } catch { return null; }
@@ -332,19 +332,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-4 md:p-8">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-6 flex items-center justify-between gap-4">
+        <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Canvas Finance Tracker</h1>
             <p className="text-sm text-gray-500">Transactions · Items · Wallets — local & private</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={onHardReset} className="px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50">Reset demo</button>
             <button onClick={onExport} className="px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50">Export JSON</button>
             <ImportButton onImport={onImport} />
           </div>
         </header>
-
-        <nav className="mb-6 grid grid-cols-4 gap-2 md:w-[48rem]">
+        <nav className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-2 md:w-[48rem]">
           {[
             { id: "dashboard", label: "Dashboard" },
             { id: "transactions", label: "Transactions" },
@@ -467,11 +466,11 @@ function TransactionsPanel({ txs, items, wallets, addTx, updTx, delTx, itemMap, 
         <button onClick={openAdd} className="px-4 py-2 rounded-2xl bg-gray-900 text-white shadow">+ Add transaction</button>
       </div>
 
-      <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+      <div className="rounded-2xl border bg-white shadow-sm overflow-x-auto">
         <div
           ref={containerRef}
           onScroll={onScroll}
-          style={{ maxHeight: containerHeight, overflow: "auto" }}
+          style={{ maxHeight: containerHeight, overflowY: "auto" }}
         >
           <div className={cls("sticky top-0 bg-gray-50 text-gray-600", TX_COLS)}>
             <div className="p-3 text-left text-xs font-semibold uppercase tracking-wide">Date</div>
