@@ -97,6 +97,21 @@ function saveDB(db /** @type {DB} */) {
   localStorage.setItem(DB_KEY, JSON.stringify(db));
 }
 
+const PROFILE_KEY = "cft_profile_v1";
+
+function loadProfile() {
+  const raw = localStorage.getItem(PROFILE_KEY);
+  if (raw) {
+    const p = tryParseJSON(raw);
+    if (p && typeof p === "object") return p;
+  }
+  return { firstName: "", lastName: "", about: "", avatar: "" };
+}
+
+function saveProfile(p) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+}
+
 function formatMoney(amount, currency = APP_CURRENCY) {
   if (amount == null || isNaN(amount)) return "—";
   try {
@@ -289,6 +304,16 @@ export default function App() {
   const { db, addTx, updTx, delTx, upsertItem, delItem, upsertWallet, delWallet, upsertBudget, delBudget, resetDemo, importDB } = useDB();
   const { itemMap, walletMap, walletBalances, totals, monthly, expenseByItem, actualByTopLevelForMonth, budgetByTopLevelForMonth, isLeaf, netThisMonth, expenseIncomeRatio } = useDerived(db);
 
+  const [profile, setProfile] = useState(() => loadProfile());
+  useEffect(() => { saveProfile(profile); }, [profile]);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const initials = useMemo(() => {
+    const f = profile.firstName?.trim()[0];
+    const l = profile.lastName?.trim()[0];
+    return ((f?f.toUpperCase():"") + (l?l.toUpperCase():"")).trim();
+  }, [profile.firstName, profile.lastName]);
+
   const [tab, setTab] = useState(/** @type {"dashboard"|"transactions"|"items"|"wallets"} */("dashboard"));
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 250);
@@ -315,6 +340,7 @@ export default function App() {
   }, [db.txs, slowSearch, itemMap, walletMap]);
 
   const onExport = useCallback(() => {
+    if (!confirm("Export data to JSON file?")) return;
     const blob = new Blob([JSON.stringify(db, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -323,7 +349,9 @@ export default function App() {
     URL.revokeObjectURL(url);
   }, [db]);
 
-  const onImport = useCallback((data) => importDB(data), [importDB]);
+  const onImport = useCallback((data) => {
+    if (confirm("Importing will replace current data. Continue?")) importDB(data);
+  }, [importDB]);
 
   const onHardReset = useCallback(() => {
     if (confirm("This will erase ALL local data. Continue?")) resetDemo();
@@ -337,12 +365,28 @@ export default function App() {
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Canvas Finance Tracker</h1>
             <p className="text-sm text-gray-500">Transactions · Items · Wallets — local & private</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={onHardReset} className="px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50">Reset demo</button>
-            <button onClick={onExport} className="px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50">Export JSON</button>
-            <ImportButton onImport={onImport} />
-          </div>
+          <button onClick={()=>setProfileOpen(true)} className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center text-sm font-medium shadow border self-start sm:self-auto">
+            {profile.avatar ? (
+              <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover" />
+            ) : (
+              initials ? initials : (
+                <svg viewBox="0 0 24 24" className="w-6 h-6 text-gray-500"><path fill="currentColor" d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/></svg>
+              )
+            )}
+          </button>
         </header>
+        {profileOpen && (
+          <Modal onClose={()=>setProfileOpen(false)}>
+            <ProfileScreen
+              profile={profile}
+              setProfile={setProfile}
+              onExport={onExport}
+              onImport={onImport}
+              onHardReset={onHardReset}
+              version={VERSION}
+            />
+          </Modal>
+        )}
         <nav className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-2 md:w-[48rem]">
           {[
             { id: "dashboard", label: "Dashboard" },
@@ -832,6 +876,62 @@ const TabPill = React.memo(function TabPill({ active, onClick, label }) {
   );
 });
 
+function ProfileScreen({ profile, setProfile, onExport, onImport, onHardReset, version }) {
+  const fileRef = useRef(null);
+  const changePhoto = useCallback((e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProfile(p => ({ ...p, avatar: reader.result }));
+    };
+    reader.readAsDataURL(f);
+    e.currentTarget.value = "";
+  }, [setProfile]);
+
+  const headerInitials = (profile.firstName?.[0] || "" ) + (profile.lastName?.[0] || "");
+
+  return (
+    <div className="w-[92vw] max-w-sm">
+      <h3 className="text-lg font-semibold mb-4">Profile</h3>
+      <div className="flex flex-col items-center gap-3">
+        <div className="relative">
+          {profile.avatar ? (
+            <img src={profile.avatar} alt="avatar" className="w-24 h-24 rounded-full object-cover" />
+          ) : (
+            <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center text-3xl text-gray-600">
+              {headerInitials ? headerInitials.toUpperCase() : (
+                <svg viewBox="0 0 24 24" className="w-12 h-12 text-gray-400"><path fill="currentColor" d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/></svg>
+              )}
+            </div>
+          )}
+          <button type="button" onClick={()=>fileRef.current?.click()} className="absolute bottom-0 right-0 p-1 bg-white border rounded-full text-xs">✎</button>
+          <input type="file" accept="image/*" ref={fileRef} className="hidden" onChange={changePhoto} />
+        </div>
+      </div>
+      <div className="mt-4 space-y-3">
+        <label className="flex flex-col gap-1 text-sm">First name
+          <input value={profile.firstName} onChange={e=>setProfile(p=>({ ...p, firstName: e.target.value }))} className="rounded-xl border px-3 py-2" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">Last name
+          <input value={profile.lastName} onChange={e=>setProfile(p=>({ ...p, lastName: e.target.value }))} className="rounded-xl border px-3 py-2" />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">About me
+          <textarea value={profile.about} onChange={e=>setProfile(p=>({ ...p, about: e.target.value }))} className="rounded-xl border px-3 py-2" />
+        </label>
+      </div>
+      <div className="mt-4 flex flex-col gap-2">
+        <button onClick={onExport} className="w-full px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50">Export JSON</button>
+        <ImportButton onImport={onImport} className="w-full text-center" />
+        <button onClick={onHardReset} className="w-full px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50">Reset demo</button>
+      </div>
+      <div className="mt-4 text-xs text-gray-500 space-y-1">
+        <p>Database version: {version}</p>
+        <p>Data is stored locally in this browser.</p>
+      </div>
+    </div>
+  );
+}
+
 function Modal({ children, onClose }) {
   useEffect(() => {
     const onEsc = (e) => { if (e.key === "Escape") onClose?.(); };
@@ -850,7 +950,7 @@ function Modal({ children, onClose }) {
   );
 }
 
-function ImportButton({ onImport }) {
+function ImportButton({ onImport, className = "" }) {
   const onChange = useCallback((e) => {
     const f = e.target.files?.[0]; if (!f) return;
     const reader = new FileReader();
@@ -863,7 +963,7 @@ function ImportButton({ onImport }) {
     e.currentTarget.value = "";
   }, [onImport]);
   return (
-    <label className="px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50 cursor-pointer">
+    <label className={cls("px-3 py-2 rounded-xl bg-white shadow border text-sm hover:bg-gray-50 cursor-pointer", className)}>
       Import JSON
       <input type="file" accept="application/json" onChange={onChange} className="hidden" />
     </label>
