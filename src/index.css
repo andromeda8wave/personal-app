@@ -4,3 +4,10 @@
 
 /* Optional: small global tweaks */
 html, body, #root { height: 100%; }
+
+@layer base {
+  html {
+    /* Scale font size based on viewport width for better mobile readability */
+    font-size: clamp(14px, 4vw, 18px);
+  }
+}
